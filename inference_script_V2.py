@@ -5,7 +5,7 @@ from huggingface_hub import login
 from openai import OpenAI
 import numpy as np
 from typing import Callable, List
-from history_list import *
+from message_generator import *
 
 r = np.random.RandomState(42)
 
@@ -38,24 +38,15 @@ llama_pipe = pipeline(
         truncation=True,
 )
 
-def llama(text: str) -> str:
-    # return llama_pipe(text)[0]['generated_text']
-    return "llama"
+def llama(msgs) -> str:
+    return llama_pipe(msgs)[0]['generated_text']
 
-def gpt(text: str) -> str:
-    '''
+def gpt(msgs) -> str:
     chat_completion = client.chat.completions.create(
-        messages=[
-            {
-                "role": "user",
-                "content": text,
-            }
-        ],
+        messages=msgs,
         model="gpt-4o-mini",
     )
     return chat_completion.choices[0].message.content
-    '''
-    return "gpt"
 
 def trans_func(x: int) -> int:
     return (x + 1) % 2

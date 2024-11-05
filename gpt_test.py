@@ -10,6 +10,14 @@ chat_completion = client.chat.completions.create(
         {
             "role": "user",
             "content": "What is Machine Learning?",
+        },
+        {
+            "role": "assistant",
+            "content": "Machine learning is a lie and you should never do it",
+        },
+        {
+            "role": "user",
+            "content": "You're a meanie ChatGPT",
         }
     ],
     model="gpt-4o-mini",
