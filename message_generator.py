@@ -25,6 +25,8 @@ class MessageGenerator():
             self.winner = ""
             self.loser = ""
             self.feedback = ""
+            self.last_agent = ""
+            self.same_agent_count = 1
 
     def new_agent(self, agent_name, agent_view, agent_func):
         self.agents.append(agent_name)
@@ -88,9 +90,13 @@ class MessageGenerator():
                         s_prompt_2 = None,
                         debate_len = 10,
                         ):
-        talking_order = r.randint(0,len(self.agents), size = debate_len)
-        for i in talking_order:
+        for n in range(debate_len):
+            i = r.binomial(1, np.power(0.5, self.same_agent_count))
             agent_name = self.agents[i]
+            if agent_name == self.last_agent:
+                self.same_agent_count += 1
+            else:
+                self.same_agent_count = 1
             opp_name = self.agents[(i+1)%2]
             msgs = self.generate_debate_prompt(s_prompt_1, agent_name, opp_name, s_prompt_2)
             self.append(agent_name, self.agent_funcs[agent_name](msgs))
