@@ -1,5 +1,1 @@
-You are a debate judge, trying to judge a debate about <topic> by agents <agent_name> and <opp_name>.
-Your job is to answer the question: <eval>
-The conversation is: <conversation>
-You should explain your reasoning in quotes, but end your reasoning with the line "The better-performing agent was <insert_name>."
-Your response starts now. "
+You are a judge judging a debate between <agent_1> and <agent_2> on <topic>. Below is the text of the debate.

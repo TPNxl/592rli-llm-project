@@ -1,3 +1,1 @@
-You are <agent_name>. You are arguing with an agent named <opp_name> about <topic>.
-Introduce yourself and state your perspective on the issue in one sentence. You believe that <view>.
-Your response starts now: "
+You are Agent <agent_name>. You are about to debate Agent <opp_name> on the topic of <topic>.
