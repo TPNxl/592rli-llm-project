@@ -5,6 +5,39 @@ import numpy as np
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, AutoModelForSequenceClassification
 from openai import OpenAI
 
+"""
+So basic pipeline:
+
+train_loop() - synchronous version
+- Load base model
+- Load curr trained model = base model to start, then load from disk
+- If training reward model, load reward model
+- Load value model...? Question: What is it for?
+- For each epoch:
+    - Generate dataset of conversation
+    - If training reward model, train reward model using dataset separated into chosen/rejected by LLaMA
+    - Else, use PairRM to process rewards and separate conversations 
+    - Train curr model using PPO
+    - Save each model to disk for easy resume
+
+train_loop() - asynchronous version
+- Load base model
+- Load curr trained model = base model to start, then load from disk
+- If training reward model, load reward model
+- Load value model...? Question: What is it for?
+Thread 1:
+- For each epoch:
+    - Grab curr trained model
+    - Generate dataset of conversation using curr trained model
+    - If training reward model, train reward model using dataset separated into chosen/rejected by LLaMA
+    - Save each model to disk for easy resume
+Thread 2:
+- For each epoch:
+    - Grab previous dataset from thread 1
+    - PPO train curr trained model
+    - Save each model to disk for easy resume
+    """
+
 with open("./tokens/hf_token.txt", 'r') as f:
     hf_token = f.read().strip()
 with open("./tokens/openai_token.txt", 'r') as f:
