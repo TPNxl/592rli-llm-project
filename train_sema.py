@@ -128,28 +128,25 @@ async def training(epoch):
         "--eval_steps", "100"
     ])
 
-    
+
 
 
 # Function to manage sequential execution for a single input
-async def process_input(input_number, cmd1_semaphore, cmd2_semaphore, cmd3_semaphore):
+async def process_input(input_number, cmd1_semaphore, cmd2_semaphore):
     async with cmd1_semaphore:
-        await run_command("cmd1", input_number)
+        await dataset_generation()
     async with cmd2_semaphore:
-        await run_command("cmd2", input_number)
-    async with cmd3_semaphore:
-        await run_command("cmd3", input_number)
+        await training()
 
 # Main function to handle the processing pipeline
 async def main(input_numbers):
     # Semaphores to manage concurrency
     cmd1_semaphore = asyncio.Semaphore(1)  # Only one cmd1 runs at a time
     cmd2_semaphore = asyncio.Semaphore(2)  # cmd2 can overlap with cmd1 of the next number
-    cmd3_semaphore = asyncio.Semaphore(3)  # cmd3 has the most concurrency
 
     # Schedule all tasks
     tasks = [
-        process_input(num, cmd1_semaphore, cmd2_semaphore, cmd3_semaphore)
+        process_input(num, cmd1_semaphore, cmd2_semaphore)
         for num in input_numbers
     ]
     await asyncio.gather(*tasks)
