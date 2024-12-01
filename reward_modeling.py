@@ -13,7 +13,7 @@
 # limitations under the License.
 """
 Full training:
-python examples/scripts/reward_modeling.py \
+python reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --dataset_name trl-lib/ultrafeedback_binarized \
     --output_dir Qwen2-0.5B-Reward \
@@ -27,7 +27,7 @@ python examples/scripts/reward_modeling.py \
     --max_length 2048
 
 LoRA:
-python examples/scripts/reward_modeling.py \
+python reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --dataset_name trl-lib/ultrafeedback_binarized \
     --output_dir Qwen2-0.5B-Reward-LoRA \
