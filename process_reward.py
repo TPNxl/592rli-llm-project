@@ -4,13 +4,13 @@ import torch.utils.data.dataset
 import llm_blender
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-from llm_blender.pair_ranker.pairrm import DebertaV2PairRM # or copy the DebertaV2PairRM definition here, https://github.com/yuchenlin/LLM-Blender/blob/main/llm_blender/pair_ranker/pairrm.py
+from llm_blender.pair_ranker.pairrm import DebertaV2PairRM
 from transformers import AutoTokenizer
 from typing import List
 
-from convo_dataset import *
+from convo_dataset_batched import *
 
-class RewardProcessedDataset(torch.utils.data.dataset):
+class RewardProcessedDataset(torch.utils.data.Dataset):
     def __init__(self, convo_dataset: Convo_Dataset):
         self.convo_dataset = convo_dataset
         self.datapoints = []
@@ -48,7 +48,7 @@ class RewardProcessedDataset(torch.utils.data.dataset):
             agent_B = convo.agents[1]
             candidates_A = [item[1] for item in convo.history if item[0] == agent_A]
             candidates_B = [item[1] for item in convo.history if item[0] == agent_B]
-            L = len(candidates_A)
+            L = min(len(candidates_A), len(candidates_B))
             inputs = [convo.topic] * L
 
             encodings = tokenize_pair(inputs, candidates_A, candidates_B)
@@ -57,7 +57,9 @@ class RewardProcessedDataset(torch.utils.data.dataset):
             values = torch.cumsum(outputs.logits, dim=1).tolist()
             
             for i in range(L):
-                datapoints.append((inputs[i], candidates_A[i], candidates_B[i]) if values[i][0] > values[i][1] else (inputs[i], candidates_B[i], candidates_A[i]))
+                datapoints.append((inputs[i], candidates_A[i], candidates_B[i], agent_A, agent_B) 
+                                  if values[i][0] > values[i][1] 
+                                  else (inputs[i], candidates_B[i], candidates_A[i], agent_B, agent_A))
 
             i += 1
 
@@ -69,7 +71,7 @@ class RewardProcessedDataset(torch.utils.data.dataset):
     def __getitem__(self, idx):
         return self.datapoints[idx]
 
-class WinnerSeparatedDataset(torch.utils.data.dataset):
+class WinnerSeparatedDataset(torch.utils.data.Dataset):
     def __init__(self, convo_dataset: Convo_Dataset):
         self.convo_dataset = convo_dataset
         self.datapoints = []
@@ -84,19 +86,26 @@ class WinnerSeparatedDataset(torch.utils.data.dataset):
 
     def process(self):
         datapoints = []
-        i = 0
+        count = 0
         for convo in self.convo_dataset.convos:
-            if i % 100 == 0:
-                print(f"Processing conversation {i}")
-            agent_A = convo.agents[convo.winner]
-            agent_B = convo.agents[convo.loser]
-            candidates_A = [item[1] for item in convo.history if item[0] == agent_A]
-            candidates_B = [item[1] for item in convo.history if item[0] == agent_B]
-            L = len(candidates_A)
+            if count % 100 == 0:
+                print(f"Processing conversation {count}")
+
+            if convo.winner == "" or convo.loser == "":
+                continue
+            agent_A = convo.winner
+            agent_B = convo.loser
+            candidates_A = [item[1]['content'] for item in convo.history if item[0] == agent_A]
+            candidates_B = [item[1]['content'] for item in convo.history if item[0] == agent_B]
+            L = min(len(candidates_A), len(candidates_B))
             inputs = [convo.topic] * L
             for i in range(L):
                 self.datapoints.append((inputs[i], candidates_A[i], candidates_B[i], agent_A, agent_B))
-            i += 1
+
+            if count % 100 == 0:
+                print(self.datapoints[-1])
+            
+            count += 1
             
         self.datapoints = datapoints
             
@@ -106,3 +115,15 @@ class WinnerSeparatedDataset(torch.utils.data.dataset):
     def __getitem__(self, idx):
         return self.datapoints[idx]
 
+
+if __name__ == "__main__":
+    convo_dataset = Convo_Dataset("./datasets/convo_test/")
+    convo_dataset.load()
+    # reward_dataset = RewardProcessedDataset(convo_dataset)
+    # reward_dataset.process()
+    # reward_dataset.save("reward_dataset.pkl")
+    winner_dataset = WinnerSeparatedDataset(convo_dataset)
+    winner_dataset.process()
+    if os.path.exists("./datasets/wsd_test.pt"):
+        os.remove("./datasets/wsd_test.pt")
+    winner_dataset.save("./datasets/wsd_test.pt")

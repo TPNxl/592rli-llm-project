@@ -6,6 +6,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, AutoMode
 from openai import OpenAI
 
 """
+CHECK TRAIN_SEMA.PY INSTEAD
+
 So basic pipeline:
 
 train_loop() - synchronous version
@@ -36,7 +38,7 @@ Thread 2:
     - Grab previous dataset from thread 1
     - PPO train curr trained model
     - Save each model to disk for easy resume
-    """
+"""
 
 with open("./tokens/hf_token.txt", 'r') as f:
     hf_token = f.read().strip()
@@ -151,7 +153,7 @@ def train_loop():
             value_model=value_model,
             train_dataset=cd,
             eval_dataset=None,
-            peft_config=get_peft_config(model_config),
+            peft_config=model_peft_config,
         )
         model_trainer.train()
 

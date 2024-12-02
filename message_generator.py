@@ -10,8 +10,10 @@ class MessageGenerator():
                  agents = [],
                  agent_views = {}, 
                  agent_funcs = {},
+                 agent_feedback = {},
                  quality = "convince the other of their perspective", 
-                 evaluation = "Who convinced the other of their perspective?"):
+                 evaluation = "Who convinced the other of their perspective?",
+                 desc=""):
         if filename is not None:
             self.load(filename)
         else:
@@ -19,6 +21,7 @@ class MessageGenerator():
             self.agents = agents
             self.agent_views = agent_views
             self.agent_funcs = agent_funcs
+            self.agent_feedback = agent_feedback
             self.history = []
             self.quality = quality
             self.evaluation = evaluation
@@ -27,12 +30,14 @@ class MessageGenerator():
             self.loser = ""
             self.feedback = ""
             self.curr_agent = 0
+            self.desc = ""
     
     def reset(self):
         self.topic = ""
         self.agents = []
         self.agent_views = {}
         self.agent_funcs = {}
+        self.agent_feedback = {}
         self.history = []
         self.quality = ""
         self.evaluation = ""
@@ -41,10 +46,11 @@ class MessageGenerator():
         self.loser = ""
         self.feedback = ""
 
-    def new_agent(self, agent_name, agent_view, agent_func):
+    def new_agent(self, agent_name, agent_view, agent_func, agent_feedback=None):
         self.agents.append(agent_name)
         self.agent_views[agent_name] = agent_view
         self.agent_funcs[agent_name] = agent_func
+        self.agent_feedback[agent_name] = agent_feedback
     
     def append(self, agent_name, val):
         self.history.append([agent_name, val])
@@ -96,6 +102,8 @@ class MessageGenerator():
         messages = []
         messages.append({"role": "system", "content": self.format_string(s_prompt_1, agent_name, opp_name)})
         messages.extend(self.generate_debate_history(agent_name))
+        if not self.agent_feedback[agent_name] is None:
+            messages.append({"role": "system", "content": "Feedback to follow:" + self.agent_feedback[agent_name]})
         if not s_prompt_2 is None:
             messages.append({"role": "system", "content": self.format_string(s_prompt_2, agent_name, opp_name)})
         return messages
@@ -133,12 +141,14 @@ class MessageGenerator():
     def set_winner_from_prompt(self, prompt):
         winner_line = prompt.split("\n")[-1]
         try:
-            self.winner = winner_line.split("Winner: Agent ")[1]
+            self.winner = winner_line.split("Agent ")[1]
             self.loser = (self.agents[1] if self.agents[0] == self.winner else self.agents[0]) if self.winner != "" else ""
             return True
         except Exception:
             print("Error setting winner from prompt")
             print("Winner line:", winner_line)
+            self.winner = ""
+            self.loser = ""
         return False
     
     def generate_ranking(self, ranking_prompt, judge_func, quality = None, evaluation = None):
@@ -150,9 +160,9 @@ class MessageGenerator():
     
     def generate_feedback_prompt(self, feedback_prompt, quality = None, evaluation = None):
         if quality is None:
-            quality = self.quality
+            quality = self.quality if self.quality is not None else "convince the other of their perspective"
         if evaluation is None:
-            evaluation = self.evaluation
+            evaluation = self.evaluation if self.evaluation is not None else "Who convinced the other of their perspective?"
         messages = []
         feedback_prompt = self.format_string(feedback_prompt)
         messages.append({"role": "system", "content": feedback_prompt})

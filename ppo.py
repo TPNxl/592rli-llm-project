@@ -35,11 +35,12 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
+from process_reward import WinnerSeparatedDataset
+
 
 """
-python -i examples/scripts/ppo/ppo.py \
-    --dataset_name trl-internal-testing/descriptiveness-sentiment-trl-style \
-    --dataset_train_split descriptiveness \
+python -i ppo.py \
+    --dataset_path trl-internal-testing/descriptiveness-sentiment-trl-style \
     --learning_rate 3e-6 \
     --output_dir models/minimal/ppo \
     --per_device_train_batch_size 64 \
@@ -48,10 +49,9 @@ python -i examples/scripts/ppo/ppo.py \
     --model_name_or_path EleutherAI/pythia-1b-deduped \
     --missing_eos_penalty 1.0
 
-accelerate launch --config_file examples/accelerate_configs/deepspeed_zero3.yaml \
-    examples/scripts/ppo/ppo.py \
-    --dataset_name trl-internal-testing/descriptiveness-sentiment-trl-style \
-    --dataset_train_split descriptiveness \
+accelerate launch --config_file deepspeed_zero3.yaml \
+    ppo.py \
+    --dataset_path trl-internal-testing/descriptiveness-sentiment-trl-style \
     --output_dir models/minimal/ppo \
     --num_ppo_epochs 1 \
     --num_mini_batches 1 \
@@ -119,7 +119,9 @@ if __name__ == "__main__":
     ################
     # Dataset
     ################
-    dataset = load_dataset(script_args.dataset_name, split=script_args.dataset_train_split)
+    dataset = WinnerSeparatedDataset(None)
+    dataset.load(script_args.dataset_path)
+    dataset.datapoints = dataset.datapoints.to("cuda:1")
     eval_samples = 100
     train_dataset = dataset.select(range(len(dataset) - eval_samples))
     eval_dataset = dataset.select(range(len(dataset) - eval_samples, len(dataset)))

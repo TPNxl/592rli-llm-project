@@ -15,7 +15,7 @@
 Full training:
 python reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name trl-lib/ultrafeedback_binarized \
+    --dataset_path trl-lib/ultrafeedback_binarized \
     --output_dir Qwen2-0.5B-Reward \
     --per_device_train_batch_size 8 \
     --num_train_epochs 1 \
@@ -29,7 +29,7 @@ python reward_modeling.py \
 LoRA:
 python reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name trl-lib/ultrafeedback_binarized \
+    --dataset_path trl-lib/ultrafeedback_binarized \
     --output_dir Qwen2-0.5B-Reward-LoRA \
     --per_device_train_batch_size 8 \
     --num_train_epochs 1 \
@@ -61,6 +61,7 @@ from trl import (
     setup_chat_format,
 )
 
+from process_reward import WinnerSeparatedDataset
 
 if __name__ == "__main__":
     parser = HfArgumentParser((ScriptArguments, RewardConfig, ModelConfig))
@@ -105,7 +106,8 @@ if __name__ == "__main__":
     ##############
     # Load dataset
     ##############
-    dataset = load_dataset(script_args.dataset_name)
+    dataset = WinnerSeparatedDataset(None)
+    dataset.load(script_args.dataset_path)
 
     ##########
     # Training
