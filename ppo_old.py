@@ -26,26 +26,22 @@ from transformers import (
 from trl import ModelConfig, PPOConfig, PPOTrainer, ScriptArguments
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
-import os
-
 
 """
 python ppo.py \
-    --dataset_name convos.csv \
+    --dataset_name trl-internal-testing/descriptiveness-sentiment-trl-style \
     --dataset_train_split descriptiveness \
     --learning_rate 3e-6 \
-    --output_dir model_weights \
+    --output_dir models/minimal/ppo \
     --per_device_train_batch_size 64 \
     --gradient_accumulation_steps 1 \
-    --total_episodes 10 \
+    --total_episodes 10000 \
     --model_name_or_path EleutherAI/pythia-1b-deduped \
-    --sft_model_path EleutherAI/pythia-1b-deduped \
-    --reward_model_path EleutherAI/pythia-1b-deduped \
     --missing_eos_penalty 1.0
 
 accelerate launch --config_file deepspeed_zero3.yaml \
     ppo.py \
-    --dataset_name convos.csv \
+    --dataset_name trl-internal-testing/descriptiveness-sentiment-trl-style \
     --dataset_train_split descriptiveness \
     --output_dir models/minimal/ppo \
     --num_ppo_epochs 1 \
@@ -63,36 +59,11 @@ accelerate launch --config_file deepspeed_zero3.yaml \
 
 
 if __name__ == "__main__":
+    print("Finished imports")
     parser = HfArgumentParser((ScriptArguments, PPOConfig, ModelConfig))
     script_args, training_args, model_config = parser.parse_args_into_dataclasses()
     # remove output_dir if exists
-    # shutil.rmtree(training_args.output_dir, ignore_errors=True)
-
-    # Get last epoch
-    max_n = -1
-    for fn in os.listdir(training_args.output_dir):
-        if fn.startswith("epoch_") and fn.split("_")[-1].isdigit():  # Ensure valid format
-            n = int(fn.split("_")[-1])
-            max_n = max(max_n, n)
-    print(f"Last epoch: {max_n}")
-
-    # Get last model paths
-    vm_path = os.path.join(training_args.output_dir, f"epoch_{max_n}/value_model") if max_n >= 0 else training_args.reward_model_path
-    policy_path = os.path.join(training_args.output_dir, f"epoch_{max_n}/policy") if max_n >= 0 else training_args.sft_model_path
-
-    max_r = -1
-    for fn in os.listdir("./reward_models/"):
-        if fn.startswith("epoch_") and fn.split("_")[-1].isdigit():  # Ensure valid format
-            n = int(fn.split("_")[-1])
-            max_r = max(max_r, n)
-    print(f"Last epoch: {max_r}")
-
-    rm_path = os.path.join("./reward_models/" f"epoch_{max_r}/") if max_r >= 0 else training_args.reward_model_path
-
-    # Debugging print statements (optional)
-    print(f"Reward Model Path: {rm_path}")
-    print(f"Value Model Path: {vm_path}")
-    print(f"Policy Path: {policy_path}")
+    shutil.rmtree(training_args.output_dir, ignore_errors=True)
 
     ################
     # Model & Tokenizer
@@ -105,23 +76,27 @@ if __name__ == "__main__":
     tokenizer.add_special_tokens({"pad_token": "[PAD]"})
     if tokenizer.chat_template is None:
         tokenizer.chat_template = SIMPLE_CHAT_TEMPLATE
+    print(training_args.reward_model_path)
+    print(training_args.sft_model_path)
     value_model = AutoModelForSequenceClassification.from_pretrained(
-        rm_path, trust_remote_code=model_config.trust_remote_code, num_labels=1
+        training_args.reward_model_path, trust_remote_code=model_config.trust_remote_code, num_labels=1
     )
     reward_model = AutoModelForSequenceClassification.from_pretrained(
-        vm_path, trust_remote_code=model_config.trust_remote_code, num_labels=1
+        training_args.reward_model_path, trust_remote_code=model_config.trust_remote_code, num_labels=1
     )
     ref_policy = AutoModelForCausalLM.from_pretrained(
         training_args.sft_model_path, trust_remote_code=model_config.trust_remote_code
     )
     policy = AutoModelForCausalLM.from_pretrained(
-        policy_path, trust_remote_code=model_config.trust_remote_code
+        training_args.sft_model_path, trust_remote_code=model_config.trust_remote_code
     )
+    print("Loaded model and tokenizer")
     ################
     # Dataset
     ################
-    dataset = load_dataset('csv', data_files=script_args.dataset_name)['train']
-    eval_samples = 100
+    # dataset = load_dataset('csv', data_files=script_args.dataset_name)['train']
+    dataset = load_dataset(script_args.dataset_name, split="descriptiveness")
+    eval_samples = 1
     train_dataset = dataset.select(range(len(dataset) - eval_samples))
     eval_dataset = dataset.select(range(len(dataset) - eval_samples, len(dataset)))
     dataset_text_field = "prompt"
@@ -135,11 +110,10 @@ if __name__ == "__main__":
                 padding=False,
             )
             return {"input_ids": outputs["input_ids"]}
-
+        
         return dataset.map(
             tokenize,
             batched=True,
-            remove_columns=dataset.column_names,
             num_proc=training_args.dataset_num_proc,
         )
 
@@ -148,6 +122,10 @@ if __name__ == "__main__":
     with PartialState().local_main_process_first():
         train_dataset = prepare_dataset(train_dataset, tokenizer)
         eval_dataset = prepare_dataset(eval_dataset, tokenizer)
+
+    print("Tokenized dataset sample:", train_dataset[0])
+    print("Prepared dataset")
+
 
     ################
     # Training
@@ -165,10 +143,8 @@ if __name__ == "__main__":
     trainer.train()
 
     # Save and push to hub
-    print("Saving model")
-    # Save each model to the output dir/epoch_{max_n+1}/the respective path
-    epoch_dir = os.path.join(training_args.output_dir, f"epoch_{max_n+1}")
-    value_model.save_pretrained(os.path.join(training_args.output_dir, f"epoch_{max_n+1}/value_model"))
-    policy.save_pretrained(os.path.join(training_args.output_dir, f"epoch_{max_n+1}/policy"))
-    print("Models saved")
-    
+    trainer.save_model(training_args.output_dir)
+    if training_args.push_to_hub:
+        trainer.push_to_hub(dataset_name=script_args.dataset_name)
+
+    trainer.generate_completions()

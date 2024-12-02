@@ -72,7 +72,7 @@ class Convo_Dataset(torch.utils.data.Dataset):
                  generate_ranking=True,
                  generate_feedback=True,
                  print_debug=False,
-                 p_feedback_out = 1,
+                 p_feedback_out = 0.2,
                  device="cuda:0"):
         self.item_path = item_path
         if not os.path.exists(item_path):
@@ -142,7 +142,7 @@ class Convo_Dataset(torch.utils.data.Dataset):
             print(f"Output from llama_new: {out}")
         return out
            
-    def generate(self, num_elems=None, debate_len = 10, bsz=32, print_debug=None):
+    def generate(self, num_elems=None, debate_len = 10, bsz=16, print_debug=None):
         debate_len = debate_len - debate_len % 2
         if print_debug is None:
             print_debug = self.print_debug
@@ -170,7 +170,10 @@ class Convo_Dataset(torch.utils.data.Dataset):
                 m.reset()
                 m.topic = topic
                 random_letters = self.r.choice(alphabet, 2, replace=False)
-                m.new_agent(random_letters[0], v[0], None)
+                if self.feedback_buf is not None and self.FEEDBACK_BUF_LEN > 0:
+                    m.new_agent(random_letters[0], v[0], None, self.feedback_buf[self.r.randint(0, self.FEEDBACK_BUF_LEN)])
+                else:
+                    m.new_agent(random_letters[0], v[0], None)
                 m.new_agent(random_letters[1], v[1], None)
                 if r.binomial(1, 0.5) < 0.5:
                     quality = None
@@ -178,7 +181,13 @@ class Convo_Dataset(torch.utils.data.Dataset):
                 else:
                     quality = self.r.choice(QUALITY_BUF)
                     evaluation = f"Who was more {quality}?"
-                m.desc = str(dataset_elem)
+                while True:
+                    m.desc = str(dataset_elem)
+                    if os.path.isfile(os.path.join(self.item_path, f"{m.desc}.hlst")):
+                        dataset_elem += 1
+                        dataset_elem %= self.TOPICS_LEN
+                    else:
+                        break
                 gens.append(m)
                 dataset_elem += 1
                 dataset_elem %= self.TOPICS_LEN
@@ -269,12 +278,16 @@ class Convo_Dataset(torch.utils.data.Dataset):
 
             # Save
             for g in gens:
-                while True:
-                    path = os.path.join(self.item_path, f"{g.desc}.hlst")
-                    if not os.path.exists(path):
-                        m.save(path)
-                        break
-            
+                path = os.path.join(self.item_path, f"{g.desc}.hlst")
+                print(f"Saving item {g.desc} to {path}")
+                g.save(path)
+
+            path = os.path.join(self.item_path, f"feedback.fbuf")
+            if os.path.isfile(path):
+                os.remove(path)
+            with open(path, "wb") as f:
+                torch.save(self.out_feedback, f)
+                    
             t2 = time.time()
             print(f"Time to generate {b} conversations: {t2-t} seconds")
             print(f"Average time per conversation: {(t2-t)/b} seconds")
@@ -282,9 +295,7 @@ class Convo_Dataset(torch.utils.data.Dataset):
                 print(f"Time to generate ranking: {t4-t3} seconds")
                 if self.generate_feedback:
                     print(f"Time to generate feedback: {t5-t4} seconds")
-        path = os.path.join(self.item_path, f"feedback.fbuf")
-        with open(path, "wb") as f:
-            torch.save(self.out_feedback, f)
+       
 
     def load(self):
         for file in os.listdir(self.item_path):
@@ -307,5 +318,5 @@ if __name__ == "__main__":
     else:
         for file in os.listdir(path):
             os.remove(os.path.join(path, file))
-    cd = Convo_Dataset(item_path=path, llama_base="meta-llama/Llama-3.2-3B-Instruct", print_debug=True)
-    cd.generate(num_elems=5, debate_len=6)
+    cd = Convo_Dataset(item_path=path, llama_base="meta-llama/Llama-3.2-3B-Instruct", print_debug=False)
+    cd.generate(num_elems=2, debate_len=2)

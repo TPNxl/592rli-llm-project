@@ -13,7 +13,7 @@
 # limitations under the License.
 """
 Full training:
-python examples/scripts/reward_modeling.py \
+python reward_modeling_base.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --dataset_name trl-lib/ultrafeedback_binarized \
     --output_dir Qwen2-0.5B-Reward \
@@ -27,7 +27,7 @@ python examples/scripts/reward_modeling.py \
     --max_length 2048
 
 LoRA:
-python examples/scripts/reward_modeling.py \
+python reward_modeling_base.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --dataset_name trl-lib/ultrafeedback_binarized \
     --output_dir Qwen2-0.5B-Reward-LoRA \
@@ -61,7 +61,6 @@ from trl import (
     setup_chat_format,
 )
 
-import os
 
 if __name__ == "__main__":
     parser = HfArgumentParser((ScriptArguments, RewardConfig, ModelConfig))
@@ -87,16 +86,8 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(
         model_config.model_name_or_path, trust_remote_code=model_config.trust_remote_code, use_fast=True
     )
-    max_r = -1
-    for fn in os.listdir("./reward_models/"):
-        if fn.startswith("epoch_") and fn.split("_")[-1].isdigit():  # Ensure valid format
-            n = int(fn.split("_")[-1])
-            max_r = max(max_r, n)
-    print(f"Last epoch: {max_r}")
-    rm_path = os.path.join("./reward_models/" f"epoch_{max_r}/") if max_r >= 0 else model_config.model_name_or_path
-    print(f"Reward Model Path: {rm_path}")
     model = AutoModelForSequenceClassification.from_pretrained(
-        rm_path, num_labels=1, trust_remote_code=model_config.trust_remote_code, **model_kwargs
+        model_config.model_name_or_path, num_labels=1, trust_remote_code=model_config.trust_remote_code, **model_kwargs
     )
     # Align padding tokens between tokenizer and model
     model.config.pad_token_id = tokenizer.pad_token_id
@@ -114,7 +105,7 @@ if __name__ == "__main__":
     ##############
     # Load dataset
     ##############
-    dataset = load_dataset('csv', data_files=script_args.dataset_name)['train']
+    dataset = load_dataset(script_args.dataset_name)
 
     ##########
     # Training
@@ -123,8 +114,8 @@ if __name__ == "__main__":
         model=model,
         processing_class=tokenizer,
         args=training_args,
-        train_dataset=dataset,
-        eval_dataset=None,
+        train_dataset=dataset[script_args.dataset_train_split],
+        eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None,
         peft_config=get_peft_config(model_config),
     )
     trainer.train()
@@ -132,5 +123,14 @@ if __name__ == "__main__":
     ############################
     # Save model and push to Hub
     ############################
-    print("Saving model")
-    trainer.save_model(os.path.join(training_args.output_dir, f"epoch_{max_r + 1}"))
+    trainer.save_model(training_args.output_dir)
+
+    if training_args.eval_strategy != "no":
+        metrics = trainer.evaluate()
+        trainer.log_metrics("eval", metrics)
+        trainer.save_metrics("eval", metrics)
+
+    # Save and push to hub
+    trainer.save_model(training_args.output_dir)
+    if training_args.push_to_hub:
+        trainer.push_to_hub(dataset_name=script_args.dataset_name)

@@ -30,7 +30,7 @@ class MessageGenerator():
             self.loser = ""
             self.feedback = ""
             self.curr_agent = 0
-            self.desc = ""
+            self.desc = desc
     
     def reset(self):
         self.topic = ""
@@ -51,6 +51,12 @@ class MessageGenerator():
         self.agent_views[agent_name] = agent_view
         self.agent_funcs[agent_name] = agent_func
         self.agent_feedback[agent_name] = agent_feedback
+
+    def overall_view(self):
+        out = f"This is a debate about {self.topic}. "
+        for agent in self.agents:
+            out += f"{agent} believes: {self.agent_views[agent]}. "
+        return out
     
     def append(self, agent_name, val):
         self.history.append([agent_name, val])
@@ -141,7 +147,12 @@ class MessageGenerator():
     def set_winner_from_prompt(self, prompt):
         winner_line = prompt.split("\n")[-1]
         try:
-            self.winner = winner_line.split("Agent ")[1]
+            if winner_line in self.agents:
+                self.winner = winner_line
+            elif "Agent " in winner_line:
+                self.winner = winner_line.split("Agent ")[1]
+            else:
+                raise Exception()
             self.loser = (self.agents[1] if self.agents[0] == self.winner else self.agents[0]) if self.winner != "" else ""
             return True
         except Exception:
