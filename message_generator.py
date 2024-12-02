@@ -46,6 +46,23 @@ class MessageGenerator():
         self.loser = ""
         self.feedback = ""
 
+    def copy(self, m):
+        self.topic = m.topic
+        self.agents = m.agents
+        self.agent_views = m.agent_views
+        self.agent_funcs = m.agent_funcs
+        self.agent_feedback = m.agent_feedback
+        self.history = m.history
+        self.quality = m.quality
+        self.evaluation = m.evaluation
+        self.rating = m.rating
+        self.winner = m.winner
+        self.loser = m.loser
+        self.feedback = m.feedback
+        for a in self.agents:
+            if not a in self.agent_feedback:
+                self.agent_feedback[a] = None
+
     def new_agent(self, agent_name, agent_view, agent_func, agent_feedback=None):
         self.agents.append(agent_name)
         self.agent_views[agent_name] = agent_view

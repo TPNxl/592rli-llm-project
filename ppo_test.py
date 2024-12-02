@@ -1,7 +1,7 @@
 import subprocess
 import os
 from convo_dataset_batched import Convo_Dataset
-from reward_processor import *
+from reward_processor_v2 import *
 import time
 
 MODEL_DIR = "./model_weights"
@@ -58,8 +58,8 @@ for i in range(1, 6):
         "--per_device_train_batch_size", "64",
         "--gradient_accumulation_steps", "1",
         "--total_episodes", "10000",
-        "--model_name_or_path", "meta-llama/Llama-3.2-1B-Instruct",
-        "--sft_model_path", "meta-llama/Llama-3.2-1B-Instruct",
+        "--model_name_or_path", "EleutherAI/pythia-1b-deduped",
+        "--sft_model_path", "EleutherAI/pythia-1b-deduped",
         "--reward_model_path", "Qwen/Qwen2-0.5B-Instruct",
         "--missing_eos_penalty", "1.0"
     ])
