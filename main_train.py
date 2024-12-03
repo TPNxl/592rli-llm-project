@@ -151,17 +151,25 @@ async def process_input(epoch, cmd1_semaphore, cmd2_semaphore):
         await training(epoch)
 
 # Main function to handle the processing pipeline
-async def main(input_numbers):
-    # Semaphores to manage concurrency
-    cmd1_semaphore = asyncio.Semaphore(1)  # Only one cmd1 runs at a time
-    cmd2_semaphore = asyncio.Semaphore(2)  # cmd2 can overlap with cmd1 of the next number
+# async def main(input_numbers):
+#     # Semaphores to manage concurrency
+#     cmd1_semaphore = asyncio.Semaphore(1)  # Only one cmd1 runs at a time
+#     cmd2_semaphore = asyncio.Semaphore(2)  # cmd2 can overlap with cmd1 of the next number
 
-    # Schedule all tasks
-    tasks = [
-        process_input(num, cmd1_semaphore, cmd2_semaphore)
-        for num in input_numbers
-    ]
-    await asyncio.gather(*tasks)
+#     # Schedule all tasks
+#     tasks = [
+#         process_input(num, cmd1_semaphore, cmd2_semaphore)
+#         for num in input_numbers
+#     ]
+#     await asyncio.gather(*tasks)
+
+# IMPORTANT different main just to run the dataset_generation because PPO is not working
+async def main(input_numbers):
+    import sys
+
+    num = sys.argv[1]
+    print(num)
+    dataset_generation(num)
 
 # Run the main loop
 if __name__ == "__main__":
