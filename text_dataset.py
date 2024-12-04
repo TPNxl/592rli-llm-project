@@ -25,8 +25,10 @@ class TextDataset(Dataset):
                     except (SyntaxError, ValueError):
                         print(f"Skipping line due to parsing error: {line}")
 
+        self.index_list = torch.randperm(len(self.topics)).tolist()
+
     def __len__(self):
         return len(self.topics)
 
     def __getitem__(self, idx):
-        return self.topics[idx]
+        return self.topics[self.index_list[idx]]

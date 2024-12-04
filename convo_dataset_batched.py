@@ -156,6 +156,7 @@ class Convo_Dataset(torch.utils.data.Dataset):
         if print_debug:
             print(f"bsz_queue: len={len(bsz_queue)} | {bsz_queue}")
         for b in bsz_queue:
+            new_agent_pos = 1 if r.binomial(1, 0.5) < 0.5 else 0
             t = time.time()
             if print_debug:
                 print(f"starting generation on dataset_elem: {dataset_elem}")
@@ -175,6 +176,7 @@ class Convo_Dataset(torch.utils.data.Dataset):
                 else:
                     m.new_agent(random_letters[0], v[0], None)
                 m.new_agent(random_letters[1], v[1], None)
+                m.extra_info["new_agent_name"] = random_letters[new_agent_pos]
                 if r.binomial(1, 0.5) < 0.5:
                     quality = None
                     evaluation = None
@@ -206,10 +208,10 @@ class Convo_Dataset(torch.utils.data.Dataset):
                     agent = g.agents[i]
                     msgs = g.generate_starting_view(FIRST_PROMPT, agent, g.agents[(i+1)%NUM_AGENTS], g.agent_views[agent])
                     prompts.append(msgs)
-                if i == 0:
-                    outputs = self.gen_base(prompts)
-                else:
+                if i == new_agent_pos:
                     outputs = self.gen_new(prompts)
+                else:
+                    outputs = self.gen_base(prompts)
                 for j in range(b):
                     g = gens[j]
                     agent = g.agents[i]
@@ -225,10 +227,10 @@ class Convo_Dataset(torch.utils.data.Dataset):
                     opp_name = g.agents[(n+1)%NUM_AGENTS]
                     msgs = g.generate_debate_prompt(CONTINUE_PROMPT, agent_name, opp_name, s_prompt_2=None)
                     prompts.append(msgs)
-                if n % 2 == 0:
-                    outputs = self.gen_base(prompts)
-                else:
+                if i % 2 == new_agent_pos:
                     outputs = self.gen_new(prompts)
+                else:
+                    outputs = self.gen_base(prompts)
                 for i in range(b):
                     g = gens[i]
                     agent_name = g.agents[n%NUM_AGENTS]
@@ -246,7 +248,7 @@ class Convo_Dataset(torch.utils.data.Dataset):
                     g = gens[i]
                     msgs = g.generate_ranking_prompt(EVAL_PROMPT, quality, evaluation)
                     prompts.append(msgs)
-                outputs = self.gen_new(prompts, length=512)
+                outputs = self.gen_base(prompts, length=512)
                 for i in range(b):
                     g = gens[i]
                     out = outputs.pop(0)

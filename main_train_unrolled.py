@@ -3,12 +3,14 @@ import os
 import torch
 from convo_dataset_batched import Convo_Dataset
 from process_reward import *
-from reward_processor_v2 import *
+from reward_processor import *
 import subprocess
 
 MODEL_DIR = "./model_weights"
 REWARD_DIR = "./reward_models"
 DATA_DIR = "./datasets"
+NUM_ITEMS = 250
+DEBATE_LEN = 6
 
 def get_last_trained_model():
     max_n = 0
@@ -16,7 +18,7 @@ def get_last_trained_model():
         if fn.startswith("epoch_"):
             epoch = int(fn.split("_")[1].split(".")[0])
             max_n = max(max_n, epoch)
-    return os.path.join(MODEL_DIR, f"epoch_{max_n}") if max_n < 1 else get_base_model()
+    return os.path.join(MODEL_DIR, f"epoch_{max_n}") if max_n >= 1 else get_base_model()
 
 def get_prev_feedback_buf(epoch):
     p = os.path.join(DATA_DIR, f"convo_epoch_{epoch-1}/feedback.fbuf")
@@ -57,8 +59,8 @@ def dataset_generation(epoch):
                        generate_ranking=True,
                        device="cuda:0")
     cd.load()
-    if not len(os.listdir(os.path.join(DATA_DIR, f"convo_epoch_{epoch}/"))) > 120:
-        cd.generate(num_elems=120, debate_len=8)
+    if not len(os.listdir(os.path.join(DATA_DIR, f"convo_epoch_{epoch}/"))) > NUM_ITEMS + 1:
+        cd.generate(num_elems=NUM_ITEMS, debate_len=DEBATE_LEN)
     else:
         print("Skipping dataset generation")
 
@@ -111,7 +113,7 @@ def training(epoch):
             "--output_dir", MODEL_DIR,
             "--per_device_train_batch_size", "4",
             "--gradient_accumulation_steps", "1",
-            "--total_episodes", "1000",
+            "--total_episodes", "1200",
             "--model_name_or_path", get_base_model(),
             "--sft_model_path", get_base_model(),
             "--reward_model_path", get_base_reward_model(),
@@ -119,24 +121,6 @@ def training(epoch):
         ])
     else:
         print("Skipping PPO model training")
-
-    # run([
-    #     "accelerate", "launch",
-    #     "--config_file", "deepspeed_zero3.yaml",
-    #     "ppo.py",
-    #     "--dataset_name", "convos2.csv",
-    #     # "--dataset_name", "trl-internal-testing/descriptiveness-sentiment-trl-style",
-    #     # "--dataset_train_split", "descriptiveness",
-    #     "--output_dir", "./model_weights",
-    #     "--learning_rate", "3e-6",
-    #     "--per_device_train_batch_size", "16",
-    #     "--gradient_accumulation_steps", "1",
-    #     "--total_episodes", "5000",
-    #     "--model_name_or_path", "EleutherAI/pythia-1b-deduped",
-    #     "--sft_model_path", "EleutherAI/pythia-1b-deduped",
-    #     "--reward_model_path", "Qwen/Qwen2-0.5B-Instruct",
-    #     "--missing_eos_penalty", "1.0"
-    # ])
 
 
 # Run the main loop

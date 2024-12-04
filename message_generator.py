@@ -31,6 +31,7 @@ class MessageGenerator():
             self.feedback = ""
             self.curr_agent = 0
             self.desc = desc
+            self.extra_info = {}
     
     def reset(self):
         self.topic = ""
@@ -45,6 +46,7 @@ class MessageGenerator():
         self.winner = ""
         self.loser = ""
         self.feedback = ""
+        self.extra_info = {}
 
     def copy(self, m):
         self.topic = m.topic
@@ -62,6 +64,7 @@ class MessageGenerator():
         for a in self.agents:
             if not a in self.agent_feedback:
                 self.agent_feedback[a] = None
+        self.extra_info = m.extra_info
 
     def new_agent(self, agent_name, agent_view, agent_func, agent_feedback=None):
         self.agents.append(agent_name)
@@ -158,7 +161,7 @@ class MessageGenerator():
         ranking_prompt = self.format_string(ranking_prompt)
         messages.append({"role": "system", "content": ranking_prompt})
         messages.extend(self.generate_debate_history(agent_name = None))
-        messages.append({"role": "system", "content": "Your analysis starts now. Please end your analysis with the line: \"Winner: Agent <name>\""})
+        messages.append({"role": "system", "content": f"Your analysis starts now. Remember, the choices of agents are Agent {self.agents[0]} and Agent {self.agents[1]}. Please end your analysis with the line: \"Winner: Agent <name>\""})
         return messages
     
     def set_winner_from_prompt(self, prompt):
