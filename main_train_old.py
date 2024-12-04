@@ -3,7 +3,7 @@ import os
 import torch
 from convo_dataset_batched import Convo_Dataset
 from process_reward import *
-from reward_processor import *
+from reward_processor_v2 import *
 import subprocess
 
 MODEL_DIR = "./model_weights"
@@ -46,20 +46,10 @@ def get_prev_feedback_buf(epoch):
 #     return os.path.join(DATA_DIR, f"wsd_epoch_{max_n}.pt") if max_n != -1 else None
 
 def get_base_model():
-    return "EleutherAI/pythia-1b-deduped"
+    return "meta-llama/Llama-3.2-3B-Instruct"
 
 def get_base_reward_model():
     return "Qwen/Qwen2-0.5B-Instruct"
-
-def run(command):
-    # Run the command
-    result = subprocess.run(command)
-
-    # Print the output and errors
-    print("Output:")
-    print(result.stdout)
-    print("Errors:")
-    print(result.stderr)
 
 # Dummy function to simulate cmd execution
 # def dataset_generation(epoch):
@@ -118,11 +108,11 @@ async def training(epoch):
     #     "--missing_eos_penalty", "1.0"
     # )
     print("#################################### Training reward model")
-    run([
+    process_reward = await asyncio.create_subprocess_exec(
         "python", "reward_modeling.py",
-        "--model_name_or_path", get_last_reward_model(),
-        "--dataset_name", os.path.join(DATA_DIR, f"dataset_epoch_{epoch}"),
-        "--output_dir", os.path.join(MODEL_DIR, f"reward_model_epoch_{epoch}"),
+        "--model_name_or_path", "Qwen/Qwen2-0.5B-Instruct",
+        "--dataset_name", "convos2.csv",
+        "--output_dir", "./reward_models",
         "--per_device_train_batch_size", "8",
         "--num_train_epochs", "1",
         "--gradient_checkpointing", "True",
@@ -132,44 +122,25 @@ async def training(epoch):
         "--use_peft",
         "--lora_r", "32",
         "--lora_alpha", "16"
-    ])
+    )
 
     print("#################################### Training PPO model")
 
-    run([
+    process_ppo = await asyncio.create_subprocess_exec(
         "python", "ppo.py",
-        "--dataset_name", os.path.join(DATA_DIR, f"dataset_epoch_{epoch}"),
+        "--dataset_name", "convos2.csv",
         # "--dataset_name", "trl-internal-testing/descriptiveness-sentiment-trl-style",
         # "--dataset_train_split", "descriptiveness",
         "--learning_rate", "3e-6",
-        "--output_dir", os.path.join(MODEL_DIR, f"model_{epoch}"),
-        "--per_device_train_batch_size", "16",
+        "--output_dir", "./model_weights",
+        "--per_device_train_batch_size", "64",
         "--gradient_accumulation_steps", "1",
         "--total_episodes", "10000",
         "--model_name_or_path", "EleutherAI/pythia-1b-deduped",
         "--sft_model_path", "EleutherAI/pythia-1b-deduped",
         "--reward_model_path", "Qwen/Qwen2-0.5B-Instruct",
         "--missing_eos_penalty", "1.0"
-    ])
-
-    run([
-        "accelerate", "launch",
-        "--config_file", "deepspeed_zero3.yaml",
-        "ppo.py",
-        "--dataset_name", "convos2.csv",
-        # "--dataset_name", "trl-internal-testing/descriptiveness-sentiment-trl-style",
-        # "--dataset_train_split", "descriptiveness",
-        "--output_dir", "./model_weights",
-        "--learning_rate", "3e-6",
-        "--per_device_train_batch_size", "16",
-        "--gradient_accumulation_steps", "1",
-        "--total_episodes", "5000",
-        "--model_name_or_path", "EleutherAI/pythia-1b-deduped",
-        "--sft_model_path", "EleutherAI/pythia-1b-deduped",
-        "--reward_model_path", "Qwen/Qwen2-0.5B-Instruct",
-        "--missing_eos_penalty", "1.0"
-    ])
-
+    )
 
 
 # Function to manage sequential execution for a single input
@@ -180,25 +151,17 @@ async def process_input(epoch, cmd1_semaphore, cmd2_semaphore):
         await training(epoch)
 
 # Main function to handle the processing pipeline
-# async def main(input_numbers):
-#     # Semaphores to manage concurrency
-#     cmd1_semaphore = asyncio.Semaphore(1)  # Only one cmd1 runs at a time
-#     cmd2_semaphore = asyncio.Semaphore(2)  # cmd2 can overlap with cmd1 of the next number
-
-#     # Schedule all tasks
-#     tasks = [
-#         process_input(num, cmd1_semaphore, cmd2_semaphore)
-#         for num in input_numbers
-#     ]
-#     await asyncio.gather(*tasks)
-
-# IMPORTANT different main just to run the dataset_generation because PPO is not working
 async def main(input_numbers):
-    import sys
+    # Semaphores to manage concurrency
+    cmd1_semaphore = asyncio.Semaphore(1)  # Only one cmd1 runs at a time
+    cmd2_semaphore = asyncio.Semaphore(2)  # cmd2 can overlap with cmd1 of the next number
 
-    num = sys.argv[1]
-    print(num)
-    dataset_generation(num)
+    # Schedule all tasks
+    tasks = [
+        process_input(num, cmd1_semaphore, cmd2_semaphore)
+        for num in input_numbers
+    ]
+    await asyncio.gather(*tasks)
 
 # Run the main loop
 if __name__ == "__main__":

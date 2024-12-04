@@ -87,13 +87,13 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(
         model_config.model_name_or_path, trust_remote_code=model_config.trust_remote_code, use_fast=True
     )
-    max_r = -1
+    max_r = 0
     for fn in os.listdir("./reward_models/"):
         if fn.startswith("epoch_") and fn.split("_")[-1].isdigit():  # Ensure valid format
             n = int(fn.split("_")[-1])
             max_r = max(max_r, n)
     print(f"Last epoch: {max_r}")
-    rm_path = os.path.join("./reward_models/" f"epoch_{max_r}/") if max_r >= 0 else model_config.model_name_or_path
+    rm_path = os.path.join("./reward_models/" f"epoch_{max_r}/") if max_r > 0 else model_config.model_name_or_path
     print(f"Reward Model Path: {rm_path}")
     model = AutoModelForSequenceClassification.from_pretrained(
         rm_path, num_labels=1, trust_remote_code=model_config.trust_remote_code, **model_kwargs

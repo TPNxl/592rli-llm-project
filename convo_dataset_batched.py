@@ -318,5 +318,5 @@ if __name__ == "__main__":
     else:
         for file in os.listdir(path):
             os.remove(os.path.join(path, file))
-    cd = Convo_Dataset(item_path=path, llama_base="meta-llama/Llama-3.2-3B-Instruct", print_debug=False)
-    cd.generate(num_elems=2, debate_len=2)
+    cd = Convo_Dataset(item_path=path, llama_base="meta-llama/Llama-3.2-1B-Instruct", print_debug=False)
+    cd.generate(num_elems=40, debate_len=8)

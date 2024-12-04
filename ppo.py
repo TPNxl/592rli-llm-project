@@ -69,25 +69,25 @@ if __name__ == "__main__":
     # shutil.rmtree(training_args.output_dir, ignore_errors=True)
 
     # Get last epoch
-    max_n = -1
+    max_n = 0
     for fn in os.listdir(training_args.output_dir):
         if fn.startswith("epoch_") and fn.split("_")[-1].isdigit():  # Ensure valid format
             n = int(fn.split("_")[-1])
             max_n = max(max_n, n)
-    print(f"Last epoch: {max_n}")
+    print(f"Last value epoch: {max_n}")
 
     # Get last model paths
-    vm_path = os.path.join(training_args.output_dir, f"epoch_{max_n}/value_model") if max_n >= 0 else training_args.reward_model_path
-    policy_path = os.path.join(training_args.output_dir, f"epoch_{max_n}/policy") if max_n >= 0 else training_args.sft_model_path
+    vm_path = os.path.join(training_args.output_dir, f"epoch_{max_n}/value_model") if max_n > 0 else training_args.reward_model_path
+    policy_path = os.path.join(training_args.output_dir, f"epoch_{max_n}/policy") if max_n > 0 else training_args.sft_model_path
 
-    max_r = -1
+    max_r = 0
     for fn in os.listdir("./reward_models/"):
         if fn.startswith("epoch_") and fn.split("_")[-1].isdigit():  # Ensure valid format
             n = int(fn.split("_")[-1])
             max_r = max(max_r, n)
-    print(f"Last epoch: {max_r}")
+    print(f"Last reward epoch: {max_r}")
 
-    rm_path = os.path.join("./reward_models/" f"epoch_{max_r}/") if max_r >= 0 else training_args.reward_model_path
+    rm_path = os.path.join("./reward_models/" f"epoch_{max_r}/") if max_r > 0 else training_args.reward_model_path
 
     # Debugging print statements (optional)
     print(f"Reward Model Path: {rm_path}")
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     print("Saving model")
     # Save each model to the output dir/epoch_{max_n+1}/the respective path
     epoch_dir = os.path.join(training_args.output_dir, f"epoch_{max_n+1}")
-    value_model.save_pretrained(os.path.join(training_args.output_dir, f"epoch_{max_n+1}/value_model"))
-    policy.save_pretrained(os.path.join(training_args.output_dir, f"epoch_{max_n+1}/policy"))
+    value_model.save_pretrained(os.path.join(epoch_dir, "value_model"))
+    policy.save_pretrained(os.path.join(epoch_dir, "policy"))
     print("Models saved")
     

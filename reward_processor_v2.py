@@ -38,7 +38,7 @@ class RewardProcessor:
                 chosen['content'] = chosen['content'].replace("\n", " ").replace("\"", "")
                 rejected['content'] = rejected['content'].replace("\n", " ").replace("\"", "")
 
-                prompt_str = "".join(msg['content'] + " " for msg in prompt).replace("\n", " ").replace("\"", "")
+                prompt_str = "".join(msg['content'].replace("\n", " ").replace("\"", "") + "\n" for msg in prompt)
 
                 processed_convos.append({
                     'prompt': prompt_str,
