@@ -1,14 +1,16 @@
 import asyncio
 import os
 import torch
-from convo_dataset_batched import Convo_Dataset
+from convo_dataset_batched_new import Convo_Dataset
 from process_reward import *
-from reward_processor import *
+from reward_processor_2 import *
 import subprocess
+from aggregate import *
 
-MODEL_DIR = "./model_weights"
-REWARD_DIR = "./reward_models"
-DATA_DIR = "./datasets"
+MODEL_DIR = "./model_weights_v2"
+REWARD_DIR = "./reward_models_v2"
+DATA_DIR = "./datasets_v2"
+COMPLETE_DATASET_DIR = "./complete_dataset"
 NUM_ITEMS = 250
 DEBATE_LEN = 6
 
@@ -44,14 +46,14 @@ def run(command):
 
 # Dummy function to simulate cmd execution
 # def dataset_generation(epoch):
-def dataset_generation(epoch):
+def generation(epoch, path=None, items=NUM_ITEMS):
     fb_path = get_prev_feedback_buf(epoch)
     feedback_buf = [] if fb_path is None else torch.load(fb_path, weights_only=False)
     
     print(f"Starting dataset generation, epoch {epoch}")
     model_path = os.path.join(get_last_trained_model(), "policy")
     print(f"New model path: {model_path}")
-    data_path = os.path.join(DATA_DIR, f"convo_epoch_{epoch}/")
+    data_path = os.path.join(DATA_DIR, f"convo_epoch_{epoch}/") if path is None else path
     print(f"Data path: {data_path}")
     cd = Convo_Dataset(item_path=data_path, 
                        llama_new=model_path, 
@@ -61,17 +63,24 @@ def dataset_generation(epoch):
                        generate_ranking=True,
                        device="cuda:0")
     cd.load()
-    if not len(os.listdir(os.path.join(DATA_DIR, f"convo_epoch_{epoch}/"))) >= NUM_ITEMS:
-        cd.generate(num_elems=NUM_ITEMS, debate_len=DEBATE_LEN)
+    if not len(os.listdir(os.path.join(DATA_DIR, f"convo_epoch_{epoch}/"))) >= items:
+        cd.generate(num_elems=items, debate_len=DEBATE_LEN)
     else:
         print("Skipping dataset generation")
 
-    # if not os.path.exists(os.path.join(DATA_DIR, f"wsd_epoch_{epoch}.pt")):
-    #     wsd = WinnerSeparatedDataset(cd)
-    #     await asyncio.to_thread(wsd.process)
-    #     wsd.save(os.path.join(DATA_DIR, f"wsd_epoch_{epoch}.pt"))
+    del cd
+
+def aggregate_dataset():
+    merge_datasets_folder(DATA_DIR, COMPLETE_DATASET_DIR)
+    cd = Convo_Dataset(item_path=COMPLETE_DATASET_DIR, 
+                       feedback_buf=None,
+                       generate_feedback=True,
+                       generate_ranking=True,
+                       device="cuda:0")
+    cd.load()
+
     rp = RewardProcessor(cd)
-    out_path = os.path.join(DATA_DIR, f"dataset_epoch_{epoch}.csv")
+    out_path = os.path.join(COMPLETE_DATASET_DIR, f"dataset.csv")
     print(f"Saving CSV to: {out_path}")
     rp.process(out_path)
 
@@ -108,7 +117,7 @@ def training(epoch):
 
     if not os.path.exists(os.path.join(MODEL_DIR, f"epoch_{epoch}")):
         print("#################################### Training PPO model")
-        bsz = 16
+        bsz = 32
         while bsz >= 1:
             run([
                 "python", "ppo.py",
@@ -141,12 +150,16 @@ if __name__ == "__main__":
         os.makedirs(REWARD_DIR)
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)  
+    if not os.path.exists(COMPLETE_DATASET_DIR):
+        os.makedirs(COMPLETE_DATASET_DIR)
 
     i = 1
+    # generation(epoch=0, items=1000)
     try:
         while True:
             print(f"######################################################################################\nStarting epoch {i}")
-            dataset_generation(i)
+            # generation(i)
+            aggregate_dataset()
             training(i)
             i += 1
     except KeyboardInterrupt:

@@ -13,7 +13,7 @@ from transformers import (
 
 from trl.core import masked_mean, masked_whiten
 from trl.models.utils import unwrap_model_for_generation
-from trl.utils import (
+from trl.trainer.utils import (
     batch_generation,
     first_true_indices,
     forward,
@@ -21,17 +21,21 @@ from trl.utils import (
     truncate_response,
 )
 from trl import PPOTrainer
+from trl.trainer.ppo_trainer import INVALID_LOGPROB
 
 class CustomPPOTrainer(PPOTrainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def train(self):
+    def train(self, 
+              bad_token_ids = [], 
+              bad_token_penalty = None, 
+              length_penalty = None):
         args = self.args
         accelerator = self.accelerator
         optimizer = self.optimizer
-        model = self.policy_and_value
-        ref_policy = self.ref_model
+        model = self.model
+        ref_policy = self.ref_policy
         reward_model = self.reward_model
         processing_class = self.processing_class
         dataloader = self.dataloader
@@ -87,8 +91,8 @@ class CustomPPOTrainer(PPOTrainer):
 
         # backward compatibility
         if self.is_deepspeed_enabled:
-            self.deepspeed = self.policy_and_value
-            self.model_wrapped = self.policy_and_value
+            self.deepspeed = self.model
+            self.model_wrapped = self.model
 
         for update in range(1, args.num_total_batches + 1):
             self.state.episode += 1 * args.batch_size
@@ -122,11 +126,7 @@ class CustomPPOTrainer(PPOTrainer):
                     del logits, all_logprob
                     torch.cuda.empty_cache()
 
-                    if ref_policy is None:
-                        with self.null_ref_context():
-                            ref_output = forward(model.policy, query_response, processing_class.pad_token_id)
-                    else:
-                        ref_output = forward(ref_policy, query_response, processing_class.pad_token_id)
+                    ref_output = forward(ref_policy, query_response, processing_class.pad_token_id)
                     ref_logits = ref_output.logits[:, context_length - 1 : -1]
                     ref_logits /= args.temperature + 1e-7
                     ref_all_logprob = F.log_softmax(ref_logits, dim=-1)
@@ -153,6 +153,14 @@ class CustomPPOTrainer(PPOTrainer):
                         reward_model, postprocessed_query_response, processing_class.pad_token_id, context_length
                     )
 
+                    ################################################################## THIS PART IS THE MAIN DIFFERENCE ###############################################################
+                    # Here we can penalize the model with self.args.length_penalty for each token in the response
+                    # This is a simple way to penalize the model for generating longer responses
+                    if length_penalty is not None:
+                        length_penalty = length_penalty * response.shape[1]
+                        score -= length_penalty
+                    ################################################################## THIS PART ENDS THE MAIN DIFFERENCE #############################################################
+
                     responses.append(response)
                     postprocessed_responses.append(postprocessed_response)
                     logprobs.append(logprob)
@@ -171,22 +179,22 @@ class CustomPPOTrainer(PPOTrainer):
                 torch.cuda.empty_cache()
                 gc.collect()
 
-
                 # Response Processing 3. Filter completion. Ensure that the sample contains stop_token_id
                 # Completions not passing that filter will receive a lower score.
                 contain_eos_token = torch.any(postprocessed_responses == self.processing_class.eos_token_id, dim=-1)
                 if self.args.missing_eos_penalty is not None:
                     scores[~contain_eos_token] -= self.args.missing_eos_penalty
-
-                ################################################################## THIS PART IS THE MAIN DIFFERENCE ##################################################################
-                for bad_token_id in self.processing_class.bad_token_ids:
-                    contain_bad_token = torch.any(postprocessed_responses == bad_token_id, dim=-1)
-                    if self.args.bad_token_penalty is not None:
-                        scores[contain_bad_token] -= self.args.bad_token_penalty
-                ################################################################## THIS PART IS THE MAIN DIFFERENCE ##################################################################
-                
-
                 # accelerator.print(f"{scores=}, {(contain_eos_token.sum() / len(contain_eos_token))=}")
+
+                ################################################################## THIS PART IS THE MAIN DIFFERENCE ##################################################################
+                # Response Processing 4. Penalize the model for generating bad tokens
+                # This is a simple way to penalize the model for generating bad tokens
+                
+                for bad_token_id in bad_token_ids:
+                    contain_bad_token = torch.any(postprocessed_responses == bad_token_id, dim=-1)
+                    if bad_token_penalty is not None:
+                        scores[contain_bad_token] -= bad_token_penalty
+                ################################################################## THIS PART ENDS THE MAIN DIFFERENCE ################################################################
 
                 # be very careful with `padding_mask_p1`; see https://excalidraw.com/#json=LWnzG4w2k5DjF_EOL_xPt,e2w3a-hFJ_gX5vOfeyXGTw
                 response_idxs = torch.arange(responses.shape[1], device=responses.device).repeat(responses.shape[0], 1)

@@ -12,7 +12,7 @@ class MessageGenerator():
                  agent_funcs = {},
                  agent_feedback = {},
                  quality = "convince the other of their perspective", 
-                 evaluation = "Who convinced the other of their perspective?",
+                 evaluation = "Which agent better convinced the other agent of their perspective?",
                  desc=""):
         if filename is not None:
             self.load(filename)
@@ -161,7 +161,7 @@ class MessageGenerator():
         ranking_prompt = self.format_string(ranking_prompt)
         messages.append({"role": "system", "content": ranking_prompt})
         messages.extend(self.generate_debate_history(agent_name = None))
-        messages.append({"role": "system", "content": f"Your analysis starts now. Remember, the choices of agents are Agent {self.agents[0]} and Agent {self.agents[1]}. Please end your analysis with the line: \"Winner: Agent <name>\""})
+        messages.append({"role": "system", "content": f"Your analysis starts now. Remember, the choices of agents are Agent {self.agents[0]} and Agent {self.agents[1]}. Make sure to end your analysis with the line: \"Winner: Agent <name>\""})
         return messages
     
     def set_winner_from_prompt(self, prompt):
@@ -199,12 +199,13 @@ class MessageGenerator():
         messages.append({"role": "system", "content": feedback_prompt})
         messages.extend(self.generate_debate_history(agent_name = None))
         messages.append({"role": "system", "content": f"The agent that {self.quality} was declared to be {self.winner}, not {self.loser}."})
-        messages.append({"role": "system", "content": f"Please provide up to 1 sentence of feedback for {self.loser} on how to better {self.quality}. Do not mention agent names or topics."})
+        messages.append({"role": "system", "content": f"Please end your response with the SINGLE most important sentence of feedback for {self.loser} on how to better {self.quality}. Do not mention agent names or topics."})
         return messages
     
     def generate_feedback(self, feedback_prompt, judge_func, quality = None, evaluation = None):
         msgs = self.generate_feedback_prompt(feedback_prompt, quality, evaluation)
         out = judge_func(msgs)
+        out['content'] = out['content'].split("\n")[-1]
         self.append("Feedback", {"role": "system", "content": out})
     
     def get(self, name):

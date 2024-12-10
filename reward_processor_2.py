@@ -1,6 +1,6 @@
 import pandas as pd
-from convo_dataset_batched_old import Convo_Dataset
-from message_generator_old import MessageGenerator
+from convo_dataset_batched import Convo_Dataset
+from message_generator import MessageGenerator
 
 with open("./prompts/continue_prompt.txt", 'r') as f:
     CONTINUE_PROMPT = f.read().replace("\n", " ")
@@ -70,7 +70,7 @@ class winEval:
                 bad_evals += 1
                 continue
             
-            wins += 1 if convo.winner == convo.agents[0] else 0
+            wins += 1 if convo.winner == convo.extra_info['new_agent_name'] else 0
         
         count = len(self.cd.convos)
         print(f"Total convos: {count}")

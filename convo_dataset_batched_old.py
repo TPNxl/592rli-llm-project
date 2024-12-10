@@ -1,4 +1,4 @@
-from message_generator import *
+from message_generator_old import *
 from text_dataset import *
 import torch
 import numpy as np

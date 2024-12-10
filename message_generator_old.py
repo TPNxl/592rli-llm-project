@@ -215,12 +215,12 @@ class MessageGenerator():
 
     def save(self, filename):
         with open(filename, 'wb') as f:
-            x = (self.topic, self.agents, self.agent_views, self.history, self.quality, self.evaluation, self.winner, self.loser, self.feedback, self.extra_info)
+            x = (self.topic, self.agents, self.agent_views, self.history, self.quality, self.evaluation, self.winner, self.loser, self.feedback)
             pickle.dump(x, f)
     
     def load(self, filename):
         with open(filename, 'rb') as f:
-            self.topic, self.agents, self.agent_views, self.history, self.quality, self.evaluation, self.winner, self.loser, self.feedback, self.extra_info = pickle.load(f)
+            self.topic, self.agents, self.agent_views, self.history, self.quality, self.evaluation, self.winner, self.loser, self.feedback = pickle.load(f)
 
 if __name__ == "__main__":
     while True:
@@ -237,8 +237,7 @@ if __name__ == "__main__":
         print("Evaluation:", m.evaluation)
         print("History:")
         for h in m.history:
-            print(h)
+            print(f"[{str(h[0])}: {h[1]['content']}]")
         print("Winner:", m.winner)
         print("Loser:", m.loser)
         print("Feedback:", m.feedback)
-        print("Extra Info:", m.extra_info)

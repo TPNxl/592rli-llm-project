@@ -23,7 +23,8 @@ from transformers import (
     HfArgumentParser,
 )
 
-from trl import ModelConfig, PPOConfig, PPOTrainer, ScriptArguments
+from trl import ScriptArguments, ModelConfig, PPOConfig
+from ppo_trainer_custom import CustomPPOTrainer
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
 import os
@@ -152,7 +153,8 @@ if __name__ == "__main__":
     ################
     # Training
     ################
-    trainer = PPOTrainer(
+
+    trainer = CustomPPOTrainer(
         config=training_args,
         processing_class=tokenizer,
         policy=policy,
@@ -162,7 +164,7 @@ if __name__ == "__main__":
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
     )
-    trainer.train()
+    trainer.train(length_penalty=0.01, bad_token_ids=[25, 101060, 487], bad_token_penalty=1)
 
     # Save and push to hub
     print("Saving model")

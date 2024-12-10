@@ -1,4 +1,4 @@
-from message_generator import *
+from message_generator_new import *
 from text_dataset import *
 import torch
 import numpy as np
@@ -10,24 +10,30 @@ import asyncio
 from datetime import datetime
 import time
 
-with open("./tokens/hf_token.txt", 'r') as f:
-    hf_token = f.read().strip()
-with open("./tokens/openai_token.txt", 'r') as f:
-    openai_token = f.read().strip()
-with open("./prompts/first_prompt.txt", 'r') as f:
-    FIRST_PROMPT = f.read().replace("\n", " ")
-with open("./prompts/continue_prompt.txt", 'r') as f:
-    CONTINUE_PROMPT = f.read().replace("\n", " ")
-with open("./prompts/feedback_prompt.txt", 'r') as f:
-    FEEDBACK_PROMPT = f.read().replace("\n", " ")
-with open("./prompts/eval_prompt.txt", 'r') as f:
-    EVAL_PROMPT = f.read().replace("\n", " ")
+TOKENS_DIR = "./tokens/"
+PROMPTS_DIR = "./prompts_new/"
+
+TOKENS = {}
+PROMPTS = {}
+
+for file in os.listdir(TOKENS_DIR):
+    if not file.endswith(".txt"):
+        continue
+    with open(os.path.join(TOKENS_DIR, file), 'r') as f:
+        TOKENS[file.replace(".txt", "")] = f.read().strip()
+
+for file in os.listdir(PROMPTS_DIR):
+    if not file.endswith(".txt"):
+        continue
+    with open(os.path.join(PROMPTS_DIR, file), 'r') as f:
+        PROMPTS[file.replace(".txt", "")] = f.read().replace("\n", " ")
+
 with open("./prompts/quality_buf.txt", 'r') as f:
     QUALITY_BUF = f.readlines()
     QUALITY_LEN = len(QUALITY_BUF)
 
-a_client = AsyncOpenAI(api_key=openai_token)
-c_client = OpenAI(api_key=openai_token)
+a_client = AsyncOpenAI(api_key=TOKENS["openai_token"])
+c_client = OpenAI(api_key=TOKENS["openai_token"])
 
 # Asynchronous function to handle each request
 async def gpt_response(messages: dict, model="gpt-4o-mini"):
@@ -182,7 +188,7 @@ class Convo_Dataset(torch.utils.data.Dataset):
                     evaluation = None
                 else:
                     quality = self.r.choice(QUALITY_BUF)
-                    evaluation = f"Who was more {quality}?"
+                    evaluation = f"Which agent was more {quality}? List your reasons."
                 while True:
                     m.desc = str(dataset_elem)
                     if os.path.isfile(os.path.join(self.item_path, f"{m.desc}.hlst")):
@@ -206,7 +212,7 @@ class Convo_Dataset(torch.utils.data.Dataset):
                 for j in range(b):
                     g = gens[j]
                     agent = g.agents[i]
-                    msgs = g.generate_starting_view(FIRST_PROMPT, agent, g.agents[(i+1)%NUM_AGENTS], g.agent_views[agent])
+                    msgs = g.generate_starting_view(PROMPTS["first_prompt"], agent, g.agents[(i+1)%NUM_AGENTS], g.agent_views[agent])
                     prompts.append(msgs)
                 if i == new_agent_pos:
                     outputs = self.gen_new(prompts)
@@ -225,7 +231,7 @@ class Convo_Dataset(torch.utils.data.Dataset):
                     g = gens[i]
                     agent_name = g.agents[n%NUM_AGENTS]
                     opp_name = g.agents[(n+1)%NUM_AGENTS]
-                    msgs = g.generate_debate_prompt(CONTINUE_PROMPT, agent_name, opp_name, s_prompt_2=None)
+                    msgs = g.generate_debate_prompt(PROMPTS["continue_prompt"], agent_name, opp_name, s_prompt_2=PROMPTS["continue_prompt_part_2"])
                     prompts.append(msgs)
                 if i % 2 == new_agent_pos:
                     outputs = self.gen_new(prompts)
@@ -246,16 +252,15 @@ class Convo_Dataset(torch.utils.data.Dataset):
                 prompts = []
                 for i in range(b):
                     g = gens[i]
-                    msgs = g.generate_ranking_prompt(EVAL_PROMPT, quality, evaluation)
+                    msgs = g.generate_ranking_prompt(PROMPTS["eval_prompt"], quality, evaluation)
                     prompts.append(msgs)
-                outputs = self.gen_base(prompts, length=512)
+                # outputs = self.gen_base(prompts, length=512)
+                outputs = gpt_generate(prompts, print_debug=print_debug)
                 for i in range(b):
                     g = gens[i]
-                    out = outputs.pop(0)
-                    out['content'] = out['content'].split(": ")[-1]
-                    out['role'] = "system"
-                    g.set_winner_from_prompt(out['content'])
-                    g.append("Judge", out)
+                    out = outputs.pop(0).split(": ")[-1]
+                    g.set_winner_from_prompt(out)
+                    g.append("Judge", {"role": "system", "content": out})
                 
                 t4 = time.time()
 
@@ -265,12 +270,12 @@ class Convo_Dataset(torch.utils.data.Dataset):
                         print("Generating feedback")
                     prompts = []
                     for i in range(b):
-                        msgs = g.generate_feedback_prompt(FEEDBACK_PROMPT, quality, evaluation)
+                        msgs = g.generate_feedback_prompt(PROMPTS["feedback_prompt"], quality, evaluation)
                         prompts.append(msgs)
                     outputs = gpt_generate(prompts, print_debug=print_debug)
                     self.out_feedback.extend(outputs)
                     for i in range(b):
-                        g.feedback = outputs.pop(0)
+                        g.feedback = outputs.pop(0).split("\n")[-1]
                         g.append("Judge", {"role": "system", "content": g.feedback})
                 else:
                     for i in range(b):
@@ -315,11 +320,11 @@ class Convo_Dataset(torch.utils.data.Dataset):
     
 if __name__ == "__main__":
     cd = Convo_Dataset()
-    path = "./datasets/convo_test/"
+    path = "./datasets/convo_2test/"
     if not os.path.exists(path):
         os.mkdir(path)
     else:
         for file in os.listdir(path):
             os.remove(os.path.join(path, file))
     cd = Convo_Dataset(item_path=path, llama_base="meta-llama/Llama-3.2-1B-Instruct", print_debug=False)
-    cd.generate(num_elems=40, debate_len=8)
+    cd.generate(num_elems=16, debate_len=8)
