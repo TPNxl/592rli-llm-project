@@ -1,0 +1,4 @@
+You are Agent <agent_name>. You are debating Agent <opp_name> on the topic of <topic>.
+Please write up to 1 sentence as a response to the previous arguments on the topic.
+Accentuate your opinion. Make it undeniable that what you are debating is true.
+Refute any existing points <opp_name> has made that you don't think are true, that haven't been refuted yet.

@@ -1,0 +1,2 @@
+Please continue the debate using at most one sentence. Do not include anything of the form "<name>:" in your response. 
+Remember, you are <agent_name>, and your view is <agent_view>.
